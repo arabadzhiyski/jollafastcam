@@ -685,6 +685,13 @@ FocusScope {
         }
 
         onCameraStatusChanged: {
+            if (camera.cameraStatus === Camera.ActiveStatus && shutterTimingLog.value) {
+                // fastcamera: compare what the viewfinder streams with what the screen shows
+                console.info("fastcamera-shutter camera active: viewfinder " + camera.viewfinder.resolution
+                             + ", image " + camera.imageCapture.resolution
+                             + ", item " + Math.round(captureView.width) + "x" + Math.round(captureView.height)
+                             + ", device " + camera.deviceId)
+            }
             if (camera.cameraStatus === Camera.ActiveStatus) {
                 reactivateTimer.retryCounter = 0
                 if (captureView._cameraWentInactive) {

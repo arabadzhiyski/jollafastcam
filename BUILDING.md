@@ -34,6 +34,7 @@ the two apart.
 | 5 | Inside the SDK | `mb2 build` |
 | 6 | Phone | Install the RPM, launch |
 | 7 | Phone | Troubleshooting, shutter timing log, removal |
+| 8 | Phone + RHEL 9 | One session that collects all performance data |
 
 ---
 
@@ -339,3 +340,135 @@ devel-su pkcon remove fastcamera
 
 The stock Camera app is untouched throughout. The two share camera settings
 (flash, resolution, etc.) but nothing else.
+
+---
+
+## Part 8: Collect performance data (one session)
+
+This session records everything needed to find where time goes beyond the
+shutter. It produces three files:
+
+| File | Recorded by | Answers |
+|------|-------------|---------|
+| `fastcamera-run.log` | the app, launched from the phone's Terminal | Startup time per stage; zero-copy or copying viewfinder; viewfinder vs. screen resolution; per-photo timeline |
+| `logcat.txt` | Android's log, over SSH | Whether Android's camera service hits its exposure-precapture timeouts |
+| `journal-camera.txt` | the system journal | Errors and warnings from the camera stack around the session |
+
+You need the phone's **Terminal** app (installed with Developer mode) and an SSH
+session from the computer, both at the same time.
+
+### 8.1 Before you start
+
+19. **Close the stock Camera app.** Only one app can hold the camera. Swipe it
+    away if it's running.
+
+20. **Turn on the app's diagnostic log.** Run this on the phone as `defaultuser`,
+    without `devel-su`:
+
+    ```bash
+    dconf write /apps/fastcamera/shutterTimingLog true
+    ```
+
+### 8.2 Start the Android log (SSH session from the computer)
+
+21. **Find `logcat`.** It's in the Android part of the system. The usual path on
+    Sailfish devices is below. If that path doesn't exist, the `find` command
+    locates it.
+
+    ```bash
+    ssh defaultuser@PHONE_IP
+    ```
+
+    ```bash
+    ls /usr/libexec/droid-hybris/system/bin/logcat
+    ```
+
+    ```bash
+    devel-su find / -name logcat -type f 2>/dev/null
+    ```
+
+22. **Clear old entries, then record to a file.** Use the path from step 21.
+    Leave this running until step 27.
+
+    ```bash
+    devel-su /usr/libexec/droid-hybris/system/bin/logcat -c
+    ```
+
+    ```bash
+    devel-su /usr/libexec/droid-hybris/system/bin/logcat -v time > ~/logcat.txt
+    ```
+
+### 8.3 Run the app from the phone's Terminal
+
+23. **Launch fastcamera with startup logging, writing everything to a file.** Open
+    the **Terminal** app on the phone and run:
+
+    ```bash
+    CAMERA_STARTUP_LOG=1 fastcamera 2>&1 | tee ~/fastcamera-run.log
+    ```
+
+    Launched this way the app runs without the app booster and outside the
+    sandbox, so it starts a little slower than from its icon. The breakdown per
+    stage is still what matters.
+
+24. **Take photos in this order.** Wait about two seconds between photos unless a
+    step says otherwise.
+    1. 5 photos of a well-lit scene, tapping the shutter normally.
+    2. 5 photos of a dim scene, e.g. indoors with the lights low.
+    3. 5 photos as fast as you can tap, to measure time between shots.
+    4. Switch to the front camera and take 2 photos, then switch back.
+
+25. **Close the app.** Swipe it away. The Terminal shows the command finishing.
+
+### 8.4 Stop and collect
+
+26. **Stop the Android log.** In the SSH session, press **Ctrl+C**.
+
+27. **Save the camera-related part of the journal.** Still in the SSH session:
+
+    ```bash
+    devel-su journalctl -b --no-pager | grep -iE "fastcamera|CAMERA_STARTUP|droid|camera|gst" > ~/journal-camera.txt
+    ```
+
+28. **Copy the three files to the computer.** Run this on the computer:
+
+    ```bash
+    scp defaultuser@PHONE_IP:'~/fastcamera-run.log ~/logcat.txt ~/journal-camera.txt' .
+    ```
+
+29. **Turn the diagnostic log off again.** Run this on the phone as `defaultuser`:
+
+    ```bash
+    dconf write /apps/fastcamera/shutterTimingLog false
+    ```
+
+### 8.5 What the files show
+
+You can check a few things yourself before sending the files on:
+
+- **Startup stages.** In `fastcamera-run.log`, lines starting `CAMERA_STARTUP`
+  carry milliseconds since launch, from the app (`app ...`) and from gst-droid
+  (`gst-droid-dev ...`). A big jump between two lines points at that stage.
+- **Viewfinder path.** Search `fastcamera-run.log`:
+  - `first buffer-queue frame available` means **zero-copy**: frames go
+    straight to the GPU.
+  - `first raw preview callback` means **copying**: every preview frame is
+    copied before display, which costs frame rate, battery and heat.
+
+  If neither line appears, the installed gst-droid predates this logging. Say so
+  when sending the files.
+- **Resolutions.** The line `fastcamera-shutter camera active: viewfinder ...`
+  gives the streamed viewfinder size and the size of the on-screen area. A
+  viewfinder much larger than the screen area is wasted work.
+- **Per photo.** The `fastcamera-shutter +N ms` lines, as described in Part 7.
+- **Exposure timeouts.** Search `logcat.txt`:
+
+  ```bash
+  grep -iE "precapture|CaptureSequencer|Camera2Client" logcat.txt
+  ```
+
+  A line like `Timed out waiting for precapture start` (or `end`) means Android's
+  camera service waited 1 s (start) or 4 s (end) for the camera hardware's
+  exposure measurement. That delay is below every open-source layer.
+
+Send all three files for the full analysis.
