@@ -4,8 +4,8 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-Name:       jolla-camera
-Summary:    Jolla Camera application
+Name:       fastcamera
+Summary:    Camera application with lower shutter latency (fork of jolla-camera)
 Version:    1.3.0
 Release:    1
 License:    BSD-3-Clause
@@ -24,7 +24,6 @@ BuildRequires:  pkgconfig(mlite5) >= 0.2.5
 BuildRequires:  pkgconfig(systemsettings) >= 0.2.13
 BuildRequires:  qt5-qttools
 BuildRequires:  qt5-qttools-linguist
-BuildRequires:  oneshot
 
 Requires:  sailfishsilica-qt5 >= 1.1.79
 Requires:  qt5-qtdeclarative-import-models2
@@ -55,73 +54,28 @@ Requires:  gstreamer1.0-plugins-bad
 Requires:  dconf
 Requires:  sailjail-launch-approval
 Requires:  mapplauncherd-booster-silica-qt5-media
-Provides:  jolla-camera-settings > 1.2.30
-Obsoletes: jolla-camera-settings <= 1.2.30
-Provides:  jolla-camera-lockscreen > 1.2.30
-Obsoletes: jolla-camera-lockscreen <= 1.2.30
 
-%{_oneshot_requires_post}
+# Translations and the dconf defaults under /apps/jolla-camera come from the stock app.
+Requires:  jolla-camera >= 1.3.0
 
 %description
-The Jolla Camera application.
-
-%package ts-devel
-Summary:   Translation source for Jolla Camera
-
-%description ts-devel
-Translation source for Jolla Camera.
-
-%package tests
-Summary:    Unit tests for Jolla Camera
-Requires:   %{name} = %{version}-%{release}
-Requires:   qt5-qtdeclarative-import-qttest
-Requires:   qt5-qtdeclarative-devel-tools
-
-%description tests
-This package contains QML unit tests for Jolla Camera application.
+A fork of the Sailfish OS camera application that installs alongside it
+and bounds how long the shutter waits for autofocus.
 
 %prep
 %setup -q -n %{name}-%{version}
 
 %build
 
-%qmake5 %{name}.pro
+%qmake5 jolla-camera.pro
 %make_build
 
 %install
 %qmake5_install
-chmod +x %{buildroot}/opt/tests/jolla-camera/auto/run-tests.sh
-chmod +x %{buildroot}/%{_oneshotdir}/*
-
-%post
-%{_bindir}/add-oneshot dconf-update || :
-%{_bindir}/add-oneshot --new-users camera-enable-hints || :
 
 %files
 %license LICENSES/BSD-3-Clause.txt
-%{_datadir}/applications/jolla-camera.desktop
-%{_datadir}/applications/jolla-camera-viewfinder.desktop
-# Define directory ownership explicitly as part of files in the datadir
-# belongs to jolla-camera-lockscreen.
-%dir %{_datadir}/jolla-camera
-%{_datadir}/jolla-camera/camera.qml
-%{_datadir}/jolla-camera/pages
-%{_datadir}/jolla-camera/cover
-%{_bindir}/jolla-camera
-%{_datadir}/translations/jolla-camera_eng_en.qm
-%{_datadir}/dbus-1/services/com.jolla.camera.service
-%{_libdir}/qt5/qml/com/jolla/camera
-%{_sysconfdir}/dconf/db/vendor.d/00-jolla-camera.txt
-%{_oneshotdir}/camera-enable-hints
-%{_userunitdir}/user-session.target.d/50-jolla-camera.conf
-%{_bindir}/jolla-camera-lockscreen
-%{_datadir}/applications/jolla-camera-lockscreen.desktop
-%{_datadir}/jolla-camera/lockscreen.qml
-%{_datadir}/jolla-camera/LockedGalleryView.qml
-%{_datadir}/jolla-settings
-
-%files ts-devel
-%{_datadir}/translations/source/jolla-camera.ts
-
-%files tests
-/opt/tests/jolla-camera
+%{_bindir}/fastcamera
+%{_datadir}/applications/fastcamera.desktop
+%{_datadir}/fastcamera
+%{_libdir}/qt5/qml/fastcamera

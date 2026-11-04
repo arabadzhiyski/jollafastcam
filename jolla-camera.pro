@@ -5,13 +5,11 @@
 
 TEMPLATE = subdirs
 
+# fastcamera: only the app and its QML module are built. The lockscreen camera,
+# quick actions, settings entry, translations and tests stay with the stock
+# jolla-camera package, which this one installs alongside.
 SUBDIRS = \
         application.pro \
-        lockscreen \
-        quickactions \
-        src \
-        settings \
-        translations \
-        tests
+        src
 
 OTHER_FILES = rpm/*.spec

@@ -4,7 +4,7 @@
 
 import QtQuick 2.6
 import QtMultimedia 5.0
-import com.jolla.camera 1.0
+import fastcamera 1.0
 
 VideoOutput {
     id: viewfinder

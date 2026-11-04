@@ -41,7 +41,7 @@ public:
 class CameraPlugin : public QQmlExtensionPlugin
 {
     Q_OBJECT
-    Q_PLUGIN_METADATA(IID "com.jolla.camera")
+    Q_PLUGIN_METADATA(IID "fastcamera")
 
 public:
 
@@ -49,7 +49,7 @@ public:
     {
         Q_UNUSED(uri)
         Q_UNUSED(engine)
-        Q_ASSERT(QLatin1String(uri) == QLatin1String("com.jolla.camera"));
+        Q_ASSERT(QLatin1String(uri) == QLatin1String("fastcamera"));
 
         AppTranslator *engineeringEnglish = new AppTranslator(engine);
         AppTranslator *translator = new AppTranslator(engine);
@@ -60,13 +60,13 @@ public:
     virtual void registerTypes(const char *uri)
     {
         Q_UNUSED(uri)
-        Q_ASSERT(QLatin1String(uri) == QLatin1String("com.jolla.camera"));
+        Q_ASSERT(QLatin1String(uri) == QLatin1String("fastcamera"));
 
-        qmlRegisterType<CaptureModel>("com.jolla.camera", 1, 0, "CaptureModel");
-        qmlRegisterType<DeclarativeCameraExtensions>("com.jolla.camera", 1, 0, "CameraExtensions");
-        qmlRegisterType<DeclarativeSettings>("com.jolla.camera", 1, 0, "SettingsBase");
-        qmlRegisterSingletonType<DeclarativeSettings>("com.jolla.camera", 1, 0, "Settings", DeclarativeSettings::factory);
-        qmlRegisterSingletonType<CameraConfigs>("com.jolla.camera", 1, 0, "CameraConfigs", singletonFactory<CameraConfigs>);
+        qmlRegisterType<CaptureModel>("fastcamera", 1, 0, "CaptureModel");
+        qmlRegisterType<DeclarativeCameraExtensions>("fastcamera", 1, 0, "CameraExtensions");
+        qmlRegisterType<DeclarativeSettings>("fastcamera", 1, 0, "SettingsBase");
+        qmlRegisterSingletonType<DeclarativeSettings>("fastcamera", 1, 0, "Settings", DeclarativeSettings::factory);
+        qmlRegisterSingletonType<CameraConfigs>("fastcamera", 1, 0, "CameraConfigs", singletonFactory<CameraConfigs>);
     }
 };
 

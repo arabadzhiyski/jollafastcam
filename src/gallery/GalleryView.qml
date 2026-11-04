@@ -10,7 +10,7 @@ import Sailfish.Silica 1.0
 import Sailfish.Silica.private 1.0 as Private
 import Sailfish.Gallery 1.0
 import Sailfish.Ambience 1.0
-import com.jolla.camera 1.0
+import fastcamera 1.0
 import ".."
 
 PagedView {

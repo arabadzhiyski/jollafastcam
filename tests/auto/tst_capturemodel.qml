@@ -6,7 +6,7 @@
 import QtQuick 2.0
 import QtTest 1.0
 import Sailfish.Silica 1.0
-import com.jolla.camera 1.0
+import fastcamera 1.0
 
 Item {
     id: main

@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 TEMPLATE = app
-TARGET = jolla-camera
+TARGET = fastcamera
 TARGETPATH = /usr/bin
 
 QT += qml quick
@@ -24,30 +24,18 @@ OTHER_FILES += \
 target.path = $$TARGETPATH
 
 desktop.path = /usr/share/applications
-desktop.files = \
-            jolla-camera.desktop \
-            jolla-camera-lockscreen.desktop \
-            jolla-camera-viewfinder.desktop
+desktop.files = fastcamera.desktop
 
 DEPLOYMENT_PATH = /usr/share/$$TARGET
 DEFINES *= DEPLOYMENT_PATH=\"\\\"\"$${DEPLOYMENT_PATH}/\"\\\"\"
 qml.path = $$DEPLOYMENT_PATH
 qml.files = *.qml cover pages
 
-service.files = com.jolla.camera.service
-service.path  = /usr/share/dbus-1/services
-
-oneshot.files = camera-enable-hints
-oneshot.path  = /usr/lib/oneshot.d
-
-schema.files = dconf/00-jolla-camera.txt
-schema.path  = /etc/dconf/db/vendor.d/
-
-INSTALLS += target desktop qml service schema oneshot
-
-usersession.path = /usr/lib/systemd/user/user-session.target.d
-usersession.files += 50-jolla-camera.conf
-INSTALLS += usersession
+# fastcamera: no D-Bus activation file, dconf schema, oneshot or booster
+# pre-start. The settings defaults (and any device-specific ones the hardware
+# adaptation adds) come from the stock jolla-camera package under
+# /apps/jolla-camera, which this app reads and writes as well.
+INSTALLS += target desktop qml
 
 packagesExist(qdeclarative5-boostable) {
     message("Building with qdeclarative-boostable support")

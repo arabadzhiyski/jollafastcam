@@ -12,7 +12,8 @@ import Nemo.Notifications 1.0
 import org.nemomobile.systemsettings 1.0
 import Sailfish.Silica 1.0
 import Sailfish.Policy 1.0
-import com.jolla.camera 1.0
+import Nemo.Configuration 1.0
+import fastcamera 1.0
 
 import "../settings"
 
@@ -78,6 +79,66 @@ FocusScope {
     property bool tapFocusActive
     property bool _captureOnFocus
     property real _captureCountdown
+
+    // fastcamera: how long a still capture may wait for the autofocus lock the shutter
+    // started. Applies only in continuous focus mode with the automatic focus point,
+    // where the trigger only confirms what continuous focus has been tracking. A tap
+    // focus, or a camera without continuous focus, still waits for the lock.
+    //   < 0  wait for the lock as the stock app does, however long it takes
+    //     0  do not trigger autofocus from the shutter; capture on the continuous focus
+    //   > 0  wait at most this many milliseconds after the capture request
+    ConfigurationValue {
+        id: shutterFocusWait
+        key: "/apps/fastcamera/shutterFocusWaitMs"
+        defaultValue: 300
+    }
+
+    // fastcamera: when true, every still capture logs its timeline to the journal
+    ConfigurationValue {
+        id: shutterTimingLog
+        key: "/apps/fastcamera/shutterTimingLog"
+        defaultValue: false
+    }
+
+    readonly property bool _boundedFocusWait: camera.focus.focusMode == Camera.FocusContinuous
+                                              && camera.focus.focusPointMode == Camera.FocusPointAuto
+                                              && shutterFocusWait.value >= 0
+
+    property real _shotStart
+    // The capture went ahead while the shutter's focus trigger was still running. Saving
+    // the image unlocks (cancels) it, but the focus result reaches QML through a queued
+    // connection and can land after that unlock as a fresh Locked status. Releasing it
+    // here keeps continuous focus running for the next shot.
+    property bool _lateFocusLock
+
+    function _shotBegin(what) {
+        _shotStart = Date.now()
+        _shotLog(what)
+    }
+
+    function _shotLog(what) {
+        if (!shutterTimingLog.value) {
+            return
+        }
+        if (_shotStart <= 0) {
+            _shotStart = Date.now()
+        }
+        console.info("fastcamera-shutter +" + (Date.now() - _shotStart) + " ms " + what)
+    }
+
+    Timer {
+        id: focusWaitTimer
+
+        interval: Math.max(1, shutterFocusWait.value)
+        onTriggered: {
+            if (captureView._captureOnFocus) {
+                captureView._shotLog("focus wait limit reached, capturing without the lock")
+                captureView._captureOnFocus = false
+                captureView._lateFocusLock = true
+                camera._completeCapture()
+            }
+        }
+    }
 
     property bool reallyWideScreen: (Screen.height / Screen.width) >= 2.0
     // wide screen can move 4:3 viewfinder a little lower and avoid overlap with top&bottom buttons
@@ -453,7 +514,9 @@ FocusScope {
         ScriptAction {
             script: {
                 if (camera.captureMode == Camera.CaptureStillImage) {
-                    if (camera.focusPointMode == Camera.FocusPointAuto) {
+                    captureView._shotBegin("self-timer fired")
+                    if (camera.focusPointMode == Camera.FocusPointAuto
+                            && !(captureView._boundedFocusWait && shutterFocusWait.value == 0)) {
                         camera.searchAndLock()
                     }
                     camera.captureImage()
@@ -492,7 +555,12 @@ FocusScope {
                     && camera.lockStatus == Camera.Unlocked
                     && focus.focusPointMode == Camera.FocusPointAuto
                     && Settings.mode.timer == 0) {
-                camera.searchAndLock()
+                if (captureView._boundedFocusWait && shutterFocusWait.value == 0) {
+                    captureView._shotBegin("shutter pressed, relying on continuous focus")
+                } else {
+                    captureView._shotBegin("shutter pressed, autofocus triggered")
+                    camera.searchAndLock()
+                }
             }
         }
 
@@ -507,9 +575,17 @@ FocusScope {
 
         function captureImage() {
             if (camera.lockStatus != Camera.Searching) {
+                captureView._shotLog("capture requested, focus not searching")
                 _completeCapture()
             } else {
                 captureView._captureOnFocus = true
+                if (captureView._boundedFocusWait) {
+                    captureView._shotLog("capture requested, waiting at most "
+                                         + Math.max(1, shutterFocusWait.value) + " ms for focus")
+                    focusWaitTimer.restart()
+                } else {
+                    captureView._shotLog("capture requested, waiting for focus")
+                }
             }
         }
 
@@ -528,6 +604,7 @@ FocusScope {
             captureBusy = true
             captureOverlay.writeMetaData()
 
+            captureView._shotLog("capture sent to camera")
             camera.imageCapture.captureToLocation(Settings.photoCapturePath('jpg'))
 
             if (focusTimer.running) {
@@ -661,6 +738,9 @@ FocusScope {
                         : _pickResolution(CameraConfigs.supportedImageResolutions, Settings.aspectRatio)
 
             onImageSaved: {
+                captureView._shotLog("image saved")
+                captureView._shotStart = 0
+
                 // HDR case emits the exposed already on the first image, delay the feedback so user avoids
                 // moving the device until it's safe again.
                 if (camera.exposure.exposureMode == Camera.ExposureHDR) {
@@ -678,6 +758,7 @@ FocusScope {
                 Settings.completePhoto(Qt.resolvedUrl(path))
             }
             onImageExposed: {
+                captureView._shotLog("image exposed (shutter callback)")
                 if (camera.exposure.exposureMode != Camera.ExposureHDR) {
                     shutterEvent.play()
                     captureAnimation.start()
@@ -686,6 +767,8 @@ FocusScope {
                 }
             }
             onCaptureFailed: {
+                captureView._shotLog("capture failed: " + message)
+                captureView._shotStart = 0
                 camera.unlockAutoFocus()
                 captureBusy = false
             }
@@ -762,9 +845,20 @@ FocusScope {
         focus.onFocusModeChanged: camera.unlock()
 
         onLockStatusChanged: {
+            if (captureView._shotStart > 0) {
+                captureView._shotLog("focus "
+                                     + (lockStatus == Camera.Locked ? "locked"
+                                        : lockStatus == Camera.Searching ? "searching" : "unlocked"))
+            }
             if (lockStatus != Camera.Searching && captureView._captureOnFocus) {
+                focusWaitTimer.stop()
                 captureView._captureOnFocus = false
                 camera._completeCapture()
+            } else if (lockStatus != Camera.Searching && captureView._lateFocusLock) {
+                captureView._lateFocusLock = false
+                if (!captureView.captureBusy && lockStatus == Camera.Locked) {
+                    camera.unlockAutoFocus()
+                }
             }
         }
     }

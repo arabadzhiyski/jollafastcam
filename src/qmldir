@@ -3,8 +3,8 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-module com.jolla.camera
-plugin jollacameraplugin
+module fastcamera
+plugin fastcameraplugin
 CaptureView 1.0 capture/CaptureView.qml
 ViewfinderOutput 1.0 capture/ViewfinderOutput.qml
 GalleryView 1.0 gallery/GalleryView.qml

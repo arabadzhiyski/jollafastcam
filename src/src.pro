@@ -4,10 +4,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 TEMPLATE = lib
-TARGET  = jollacameraplugin
+TARGET  = fastcameraplugin
 TARGET = $$qtLibraryTarget($$TARGET)
 
-MODULENAME = com/jolla/camera
+MODULENAME = fastcamera
 TARGETPATH = $$[QT_INSTALL_QML]/$$MODULENAME
 
 QT += gui-private qml quick multimedia

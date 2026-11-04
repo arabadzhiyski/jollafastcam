@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2013 - 2021 Jolla Ltd.
+# SPDX-FileCopyrightText: 2025 Jolla Mobile Ltd
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+[Desktop Entry]
+Type=Application
+Name=Fast Camera
+Icon=icon-launcher-camera
+Exec=/usr/bin/invoker --type=silica-media,silica-qt5 -A -- /usr/bin/fastcamera
+Comment=Camera with a bounded shutter focus wait
+
+[X-Sailjail]
+ApplicationName=fastcamera
+OrganizationName=local
+Permissions=Camera;Audio;Microphone;Pictures;Videos;MediaIndexing;Location;Privileged;Ambience;RemovableMedia

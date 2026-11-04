@@ -5,7 +5,7 @@
 
 import QtQuick 2.0
 import Sailfish.Silica 1.0
-import com.jolla.camera 1.0
+import fastcamera 1.0
 
 Loader {
     anchors.fill: parent
