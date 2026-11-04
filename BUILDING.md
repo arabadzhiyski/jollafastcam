@@ -1,15 +1,25 @@
 # Building and installing fastcamera (RHEL 9 host → Jolla Phone)
 
-This guide builds the `fastcamera` RPM on a RHEL 9 computer with the Sailfish SDK,
-then installs it on the phone next to the stock Camera app.
+This guide builds the `fastcamera` RPM on a RHEL 9 computer with the Sailfish
+**Platform SDK**, then installs it on the phone next to the stock Camera app.
+
+The Platform SDK is a chroot (a self-contained Sailfish build environment in a
+directory) that you enter with `sudo`. It needs **neither Docker nor VirtualBox**,
+so your Podman setup is left alone. It is command-line only. The build tool is
+`mb2`, and it produces the same RPM as the graphical Sailfish SDK.
 
 > **Not checked against the current official docs.** docs.sailfishos.org was out of
-> reach when this was written, so the steps come from how the Sailfish SDK and its
-> `sfdk` tool have worked so far. Steps marked **(verify)** are the ones most likely
-> to differ. If one doesn't match what you see, keep the exact output; it's needed
-> to adjust the step.
+> reach when this was written, so the steps come from how the Platform SDK has
+> worked so far. Steps marked **(verify)** are the ones most likely to differ:
+> mainly download URLs and file names. The authoritative pages are
+> docs.sailfishos.org → Tools → Platform SDK → *Installation* and
+> *Target Installation*. If a step doesn't match, keep the exact output; it's
+> needed to adjust the step.
 
 In the commands below, `PHONE_IP` stands for your phone's IP address.
+Commands are run **on the RHEL host** unless the step says *inside the SDK* or
+*on the phone*. The SDK shell prompt starts with `PlatformSDK` so you can tell
+the two apart.
 
 ---
 
@@ -18,10 +28,10 @@ In the commands below, `PHONE_IP` stands for your phone's IP address.
 | Part | Where | What |
 |------|-------|------|
 | 1 | Phone | Developer mode, SSH, OS version |
-| 2 | RHEL 9 | Docker CE and the Sailfish SDK |
-| 3 | RHEL 9 | A build target matching the phone |
+| 2 | RHEL 9 | Install the Platform SDK chroot |
+| 3 | Inside the SDK | Install the aarch64 build target |
 | 4 | RHEL 9 | Clone the code, copy one missing file from the phone |
-| 5 | RHEL 9 | `sfdk build` |
+| 5 | Inside the SDK | `mb2 build` |
 | 6 | Phone | Install the RPM, launch |
 | 7 | Phone | Troubleshooting, shutter timing log, removal |
 
@@ -60,137 +70,110 @@ In the commands below, `PHONE_IP` stands for your phone's IP address.
 
 ---
 
-## Part 2: Install Docker CE and the Sailfish SDK on RHEL 9
+## Part 2: Install the Platform SDK on RHEL 9
 
-The SDK compiles inside a container called the *build engine*, using Docker
-(or VirtualBox). RHEL 9 ships Podman instead of Docker, and the SDK expects real
-Docker, so install Docker CE from Docker's own repository.
-
-### 2.1 Docker CE
-
-5. **Remove conflicting packages if present.** Docker's RHEL instructions ask you to
-   remove Podman's Docker shim and `runc`. Skip this if you rely on Podman for
-   other work. The two can coexist as long as `podman-docker` isn't installed.
+5. **Install the tools to download and unpack the SDK.** These are usually
+   already present. The target archives in Part 3 are unpacked by the SDK itself,
+   so nothing else is needed on the host.
 
    ```bash
-   sudo dnf remove -y podman-docker runc
+   sudo dnf -y install curl bzip2 tar
    ```
 
-6. **Add Docker's repository and install Docker.**
+6. **Choose where the SDK lives, and remember it in your shell.** `/srv/sailfishos`
+   is the conventional location. It needs a few GB.
 
    ```bash
-   sudo dnf -y install dnf-plugins-core
+   echo 'export PLATFORM_SDK_ROOT=/srv/sailfishos' >> ~/.bashrc
    ```
 
    ```bash
-   sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
+   echo 'alias sfossdk=$PLATFORM_SDK_ROOT/sdks/sfossdk/sdk-chroot' >> ~/.bashrc
    ```
 
    ```bash
-   sudo dnf -y install docker-ce docker-ce-cli containerd.io
+   source ~/.bashrc
    ```
 
-7. **Start Docker now and on every boot.**
+7. **Download the Platform SDK chroot (verify).** It's an i486 tarball. The 32-bit
+   x86 build environment runs fine on an x86_64 RHEL kernel.
 
    ```bash
-   sudo systemctl enable --now docker
+   curl -O https://releases.sailfishos.org/sdk/installers/latest/Jolla-latest-SailfishOS_Platform_SDK_Chroot-i486.tar.bz2
    ```
 
-8. **Let your user run Docker without sudo.** The SDK needs this.
+8. **Unpack it as root.** `--numeric-owner -p` keeps the file owners and
+   permissions the chroot needs.
 
    ```bash
-   sudo usermod -aG docker $USER
+   sudo mkdir -p $PLATFORM_SDK_ROOT/sdks/sfossdk
    ```
-
-   **Log out and log back in** (or reboot) so the group change takes effect. Then check:
 
    ```bash
-   docker run --rm hello-world
+   sudo tar --numeric-owner -p -xjf Jolla-latest-SailfishOS_Platform_SDK_Chroot-i486.tar.bz2 -C $PLATFORM_SDK_ROOT/sdks/sfossdk
    ```
 
-   It should print "Hello from Docker!".
+9. **Give the SDK shell a recognisable prompt, then enter it.** The SDK reads
+   `~/.mersdk.profile` on entry. `sfossdk` asks for your sudo password because it
+   bind-mounts your home directory into the chroot. Your files are visible inside
+   at the same paths.
 
-### 2.2 Sailfish SDK
+   ```bash
+   echo 'PS1="PlatformSDK $PS1"' > ~/.mersdk.profile
+   ```
 
-9. **Download the installer.** On docs.sailfishos.org go to Tools → Sailfish SDK →
-   Installation and download the **Linux 64-bit** installer, a `.run` file. Take the
-   newest version. Older ones can fail on hosts with cgroups v2, which RHEL 9 uses.
+   ```bash
+   sfossdk
+   ```
 
-10. **Install the libraries the graphical installer needs.** The installer is a Qt
-    GUI app. On a RHEL 9 Workstation most of these are already present.
-
-    ```bash
-    sudo dnf -y install libxkbcommon-x11 xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil
-    ```
-
-11. **Run the installer.** Run it as your normal user, not root, and from a graphical
-    session.
-
-    ```bash
-    chmod +x ~/Downloads/SailfishSDK-*.run
-    ```
-
-    ```bash
-    ~/Downloads/SailfishSDK-*.run
-    ```
-
-    - Install location: keep the default `~/SailfishOS`.
-    - Build engine: choose **Docker**.
-    - Components: the defaults are fine. Build targets are handled in Part 3.
-
-12. **Put `sfdk` on your PATH.** `sfdk` is the SDK's command-line build tool.
-
-    ```bash
-    echo 'export PATH="$HOME/SailfishOS/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
-    ```
-
-    ```bash
-    sfdk --version
-    ```
+   The prompt now starts with `PlatformSDK`. Type `exit` to leave. Run `sfossdk`
+   again whenever a step says *inside the SDK*.
 
 ---
 
-## Part 3: Install a build target for the phone
+## Part 3: Install the build target (inside the SDK)
 
-A *build target* is a copy of the phone's system libraries that you compile against.
-It must be **aarch64**, and its version should match the phone's version from
-step 1.
+A *build target* is a copy of the phone's system libraries that you compile
+against. You need two pieces, both installed with `sdk-assistant`: the
+**tooling**, which holds the compiler and helper tools, and the **aarch64 target**.
+Ideally both match the phone's version from step 1.
 
-13. **List the installed tools and targets.**
+10. **Install the tooling and the aarch64 target (verify).** These URLs fetch the
+    *latest* public release. For a specific version, browse
+    `https://releases.sailfishos.org/sdk/targets/` and use the files whose names
+    contain your version. Each download is several hundred MB.
 
     ```bash
-    sfdk tools list
+    sdk-assistant create SailfishOS-latest https://releases.sailfishos.org/sdk/targets/Sailfish_OS-latest-Sailfish_SDK_Tooling-i486.tar.7z
     ```
 
-14. **If no aarch64 target matching your phone is listed, install one.**
-
-    - **GUI (easiest):** run the *SDK Maintenance Tool* in `~/SailfishOS`, choose
-      **Add or remove components**, and tick the build target
-      `SailfishOS-<your version>-aarch64`.
-    - **Command line (verify):**
-
-      ```bash
-      sfdk tools list --available
-      ```
-
-      ```bash
-      sfdk tools install SailfishOS-5.0.0.xx-aarch64
-      ```
+    ```bash
+    sdk-assistant create SailfishOS-latest-aarch64 https://releases.sailfishos.org/sdk/targets/Sailfish_OS-latest-Sailfish_SDK_Target-aarch64.tar.7z
+    ```
 
     If the newest available target is slightly older than the phone's version,
     that's normally fine: apps built against an older release run on newer ones.
 
+11. **Check what's installed.** Use the target's exact name in Part 5.
+
+    ```bash
+    sdk-assistant list
+    ```
+
 ---
 
-## Part 4: Get the code and the missing file
+## Part 4: Get the code and the missing file (on the host)
 
-15. **Clone the fork.** `fastcamera` is the default branch.
+Do this part in a normal RHEL terminal, not inside the SDK. `scp`/`ssh` to the
+phone are simplest from the host.
+
+12. **Clone the fork.** `fastcamera` is the default branch.
 
     ```bash
     git clone https://github.com/arabadzhiyski/jollafastcam.git ~/jollafastcam
     ```
 
-16. **Copy `DisabledByMdmView.qml` from the phone.** The app uses this file, but
+13. **Copy `DisabledByMdmView.qml` from the phone.** The app uses this file, but
     Jolla's public repository doesn't contain it. Without it the app won't start.
     The stock Camera app on your phone has it. Try the first command; if it says
     "No such file", try the second.
@@ -211,25 +194,25 @@ step 1.
 
 ---
 
-## Part 5: Build
+## Part 5: Build (inside the SDK)
 
-17. **Go to the project and select the target.** Use the exact target name from
-    step 13 or 14.
+14. **Enter the SDK and go to the project.** Your home directory is mounted
+    inside, so the path is the same.
+
+    ```bash
+    sfossdk
+    ```
 
     ```bash
     cd ~/jollafastcam
     ```
 
-    ```bash
-    sfdk config target=SailfishOS-5.0.0.xx-aarch64
-    ```
-
-18. **Build.** `sfdk` reads `rpm/fastcamera.spec`, installs the build dependencies
-    into the target, compiles, and packages. The first build is slower because it
-    downloads those dependencies.
+15. **Build.** `mb2` reads `rpm/fastcamera.spec`, installs the build dependencies
+    into the target, compiles, and packages. Use the exact target name from step 11.
+    The first build is slower because it downloads those dependencies.
 
     ```bash
-    sfdk build
+    mb2 -t SailfishOS-latest-aarch64 build
     ```
 
     The result is `RPMS/fastcamera-1.3.0-1.aarch64.rpm`:
@@ -240,12 +223,11 @@ step 1.
 
 ### If the build fails
 
-- **The build engine won't start.** Check that Docker runs (`docker ps`) and that
-  you logged out and back in after step 8. Check that you have the newest SDK
-  (cgroups v2).
-- **"Permission denied" on project files.** This can be SELinux blocking the
-  container from reading your home directory. Check the denials, and keep the
-  output rather than switching SELinux off:
+- **`sfossdk` fails to enter, or mounts fail.** Check that `PLATFORM_SDK_ROOT`
+  is set (`echo $PLATFORM_SDK_ROOT`) and that the files from step 8 are owned
+  by root.
+- **"Permission denied" on your files.** This can be SELinux. Check the denials,
+  and keep the output rather than switching SELinux off:
 
   ```bash
   sudo ausearch -m avc -ts recent
@@ -258,15 +240,15 @@ Keep the last 30–40 lines of output for any of these.
 
 ---
 
-## Part 6: Install on the phone
+## Part 6: Install on the phone (from the host)
 
-19. **Copy the RPM to the phone.**
+16. **Copy the RPM to the phone.** Run this in a normal RHEL terminal, not the SDK.
 
     ```bash
-    scp RPMS/fastcamera-*.aarch64.rpm defaultuser@PHONE_IP:
+    scp ~/jollafastcam/RPMS/fastcamera-*.aarch64.rpm defaultuser@PHONE_IP:
     ```
 
-20. **Log in and install as root.** `devel-su` asks for the developer password from
+17. **Log in and install as root.** `devel-su` asks for the developer password from
     step 3. `pkcon` also installs anything the app depends on.
 
     ```bash
@@ -284,11 +266,11 @@ Keep the last 30–40 lines of output for any of these.
     devel-su rpm -Uvh ~/fastcamera-*.aarch64.rpm
     ```
 
-21. **Launch.** **Fast Camera** appears in the app grid with the normal camera icon.
+18. **Launch.** **Fast Camera** appears in the app grid with the normal camera icon.
     On first launch Sailfish asks you to approve its permissions (camera,
     microphone, location, and so on).
 
-To install a newer build later, repeat steps 18–20. `rpm -Uvh` upgrades in place.
+To install a newer build later, repeat steps 14–17. `rpm -Uvh` upgrades in place.
 
 ---
 
