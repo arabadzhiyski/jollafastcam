@@ -21,7 +21,7 @@ for autofocus.
 - **Shutter timing log.** `/apps/fastcamera/shutterTimingLog` set to `true`
   logs each still capture's timeline (`fastcamera-shutter +<ms> ...`).
 - **Not built:** lockscreen camera, quick actions, settings page entry,
-  translations, tests, D-Bus activation, booster pre-start. Translations and the
+  translations, tests, D-Bus activation. Translations and the
   dconf defaults under `/apps/jolla-camera` come from the stock package, so camera
   settings are shared with the stock app.
 

@@ -79,3 +79,4 @@ and bounds how long the shutter waits for autofocus.
 %{_datadir}/applications/fastcamera.desktop
 %{_datadir}/fastcamera
 %{_libdir}/qt5/qml/fastcamera
+%{_userunitdir}/user-session.target.d/50-fastcamera.conf

@@ -31,11 +31,15 @@ DEFINES *= DEPLOYMENT_PATH=\"\\\"\"$${DEPLOYMENT_PATH}/\"\\\"\"
 qml.path = $$DEPLOYMENT_PATH
 qml.files = *.qml cover pages
 
-# fastcamera: no D-Bus activation file, dconf schema, oneshot or booster
-# pre-start. The settings defaults (and any device-specific ones the hardware
+# fastcamera: no D-Bus activation file, dconf schema or oneshot. The settings defaults (and any device-specific ones the hardware
 # adaptation adds) come from the stock jolla-camera package under
 # /apps/jolla-camera, which this app reads and writes as well.
 INSTALLS += target desktop qml
+
+# Pre-start the sandboxed booster that invoker -A in the desktop file needs.
+usersession.path = /usr/lib/systemd/user/user-session.target.d
+usersession.files = 50-fastcamera.conf
+INSTALLS += usersession
 
 packagesExist(qdeclarative5-boostable) {
     message("Building with qdeclarative-boostable support")
