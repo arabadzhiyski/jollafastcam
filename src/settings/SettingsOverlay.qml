@@ -76,10 +76,6 @@ PinchArea {
 
     signal clicked(var mouse)
 
-    function showExposure() {
-        exposureSlider.flash()
-    }
-
     function closeMenus() {
         _closing = true
         whiteBalanceMenu.open = false
