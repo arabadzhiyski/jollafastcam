@@ -35,15 +35,10 @@ GalleryView {
     overlay.ambienceAllowed: false
     overlay.additionalActions: IconButton {
         icon.source: "image://theme/icon-m-file-image?" + Theme.lightPrimaryColor
-        onClicked: root._openInGallery()
-    }
-    openInGalleryAllowed: true
-
-    onOpenInGallery: _openInGallery()
-
-    function _openInGallery() {
-        var source = root.source + ""
-        dbusGallery.call('openFile', source)
+        onClicked: {
+            var source = root.source + ""
+            dbusGallery.call('openFile', source)
+        }
     }
 
     ViewPlaceholder {
